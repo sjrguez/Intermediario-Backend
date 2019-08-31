@@ -74,9 +74,7 @@ function enviarImagenes(id: string, lugar: string ,imagenes: any[]) {
         };
 
         REQUEST.post({url:`${URL_SERVIDOR_IMAGES}/upload/saveBlog`, formData: formData},async (err: any, httpResponse: any, body: any) => {
-
-            await eliminarImagenes(imagenes)
-        
+       
            if (err) return reject({ok: false})
             let data = JSON.parse(body)
             resolve({ 
