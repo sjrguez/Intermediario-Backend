@@ -2,15 +2,14 @@ import { Router, Request,Response } from 'express';
 import Funciones from '../../Global/funciones'
 import { isNullOrUndefined } from 'util';
 import { URL_BACKEND, PREFIJO_SERVER, SUFIJO_SERVER } from '../../Global/enviroment';
-const ROUTER: Router = Router();
 
+const ROUTER: Router = Router();
 
 const PAGINA  = require('../../Models/pagina/pagina.model')
 const USUARIO = require('../../Models/usuario/usuario.model')
 const TIPOEMPRESA = require('../../Models/pagina/tipo_empresa.model')
 
 
-const Mongoose = require('mongoose') ;
 const Path = require('path')
 const Multer = require('multer');
 const RP = require('request-promise');
@@ -104,7 +103,7 @@ ROUTER.post('/reg-pag/:user',async (req: Request, res: Response) => {
             if(error_mensaje.mensaje !== '') throw error_mensaje    
             
         } catch (error) {
-            await Funciones.eliminarImagenes(Files)
+            if(!isNullOrUndefined(FilesReq) &&  FilesReq.length > 0) await Funciones.eliminarImagenes(Files)
 
             return Funciones.Http_Error(res,error.code, error )
         }
@@ -117,6 +116,7 @@ ROUTER.post('/reg-pag/:user',async (req: Request, res: Response) => {
             if(validarData.data) (error_mensaje.code = 404,error_mensaje.mensaje = 'El nombre de la pagina esta utilizado', error_mensaje.descripcion = 'El nombre esta siendo utilizado por una pagina certificada')
             if(error_mensaje.mensaje !== '') throw error_mensaje
         } catch (error) {
+            if(!isNullOrUndefined(FilesReq) &&  FilesReq.length > 0) await Funciones.eliminarImagenes(Files)
             await Funciones.eliminarImagenes(Files)
 
             return Funciones.Http_Error(res,error.code, error )
@@ -130,6 +130,7 @@ ROUTER.post('/reg-pag/:user',async (req: Request, res: Response) => {
             if(!validarIdTipoPag.data) (error_mensaje.code = 404,error_mensaje.mensaje = 'Este tipo de empresa no existe', error_mensaje.descripcion = 'Este tipo de empresa no existe en la plataforma')
             if(error_mensaje.mensaje !== '') throw error_mensaje    
         } catch (error) {
+            if(!isNullOrUndefined(FilesReq) &&  FilesReq.length > 0) await Funciones.eliminarImagenes(Files)
             await Funciones.eliminarImagenes(Files)
             Funciones.eliminarImagenes(Files)
 
@@ -331,8 +332,8 @@ ROUTER.put('/upd-page-portada/:page/:user', async (req: Request, res: Response) 
             return  Funciones.Http_Error(res, 500, err)
         }
         
-
-        if(FilesReq === 0){
+        
+        if(isNullOrUndefined(FilesReq)  || FilesReq.length === 0){
             let err = {mensaje: 'No se pudo cambiar imagen de portada esta pagina', descripcion:'Ha sucedido un error al cambiar la imagen de portada'}
             return  Funciones.Http_Error(res, 500, err)
         }
@@ -354,9 +355,6 @@ ROUTER.put('/upd-page-portada/:page/:user', async (req: Request, res: Response) 
             
         let pagina: any = ValidarID.data
 
-        return res.json({
-            pagina: pagina
-        })
         let Files: any = []
         if(FilesReq > 1){
             for(let x = 0; x == 0; x++) {
@@ -380,39 +378,42 @@ ROUTER.put('/upd-page-portada/:page/:user', async (req: Request, res: Response) 
                  
                 const ResImages: any = await Funciones.enviarImagenes(pagina._id, `Pagina/user-${pagina.id_usuario}` , Files)
                 Images = ResImages.datos
-                pagina.empresa.logo = Images[0].img
-                pagina.empresa.thumb = Images[0].thumb
-                
             } catch (error) {
-                const errrorImage = {
-                    code:500,
+                const errorImage = {
                     mensaje: 'No se pudo cambiar imagen de portada esta pagina',
                     descripcion:'Ha sucedido un error al cambiar la imagen de portada'
                 }
-                return Funciones.Http_Error(res,errrorImage.code,errrorImage)
+                return Funciones.Http_Error(res, 500, errorImage)
+            } finally {
+                await Funciones.eliminarImagenes(FilesReq)
             }
         }
 
             
         try {
-            const Cambios = {
-                fecha_modificacion:  new Date(),
-                portada : Images[0]
-            }
+            var options = {
+                method: 'PUT',
+                uri: `${URL_BACKEND}/${PREFIJO_SERVER}-Pag-Images-${SUFIJO_SERVER}/upd-page-portada/${PageID}/${UserID}`,
+                body: {
+                    portada: JSON.stringify(Images[0])
+                },
+                json: true
+            };
+
+            await RP(options)
             res.status(200).json({
                 ok:true,
                 mensaje:'Se ha cambiado correctamente',
                 img: Images[0].img
             })
         } catch (error) {
-            await session.abortTransaction();
             if (Files.length > 0) {
                 await Funciones.RemoverImagenesServidor(Images)
             }
-            error_mensaje.code = 500
             error_mensaje.mensaje = 'No se pudo cambiar imagen de portada esta pagina',
             error_mensaje.descripcion = 'Ha sucedido un error al cambiar la imagen de portada'
-            throw error_mensaje
+            return Funciones.Http_Error(res, 500, error_mensaje)
+
         }
 
     })
